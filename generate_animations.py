@@ -111,7 +111,6 @@ fig.update_layout(updatemenus=[dict(type="buttons", buttons=[dict(label="Play", 
 fig.update(frames=frames)
 
 fig.update_layout(template="plotly_dark", title_text=base_text+str(angles[0])+"°")
-fig.show(renderer='browser')  
 fig.write_html(base_text + str(nb_antenas) + ".html")
 
 
