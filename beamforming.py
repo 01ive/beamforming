@@ -20,10 +20,10 @@ def generate_noise_on_signal(signals: 'Input signal matrix') -> 'Matrix of noisy
     """
     antena_rx_nbr = signals.shape[0]
     N = signals.shape[1]
-    n = np.random.randn(antena_rx_nbr, N) + 1j*np.random.randn(antena_rx_nbr, N)
-    return signals + 0.5*n
+    n = np.random.randn(antena_rx_nbr, N) + 1j * np.random.randn(antena_rx_nbr, N)
+    return signals + 0.5 * n
 
-def beamforming(signals: 'Input signal matrix', steering_vectors:'Delay matrix for each antenas') -> 'Beam matrix':
+def beamforming(signals: 'Input signal matrix', steering_vectors: 'Delay matrix for each antenas') -> 'Beam matrix':
     """
     Calculate beam. Use conjugate to reverse delay.
     """
@@ -32,40 +32,38 @@ def beamforming(signals: 'Input signal matrix', steering_vectors:'Delay matrix f
 def calculate_beam(tx_signal: 'Real signals seen by antenas', 
                    antena_rx_nbr: 'Number of antennas to manage', 
                    antena_spacing: 'Space between 2 antennas', 
-                   theta: 'Angle between Rx signal and antenas plan') -> 'Energy level by angle':
+                   theta: 'Angle between Rx signal and antenas plan',
+                   n_scan: int = 1000) -> 'Energy level by angle':
     """
-    Calculate N beams on antenas plan and calculate energy for each beam
+    Calculate N beams on antenas plan with noise (Vectorized version)
     """
-    steering_vectors = create_steering_vectors(antena_rx_nbr, antena_spacing, np.radians(theta))
-
-    steering_vectors = steering_vectors.reshape(-1,1)
-    tx_signal = tx_signal.reshape(1,-1)
-    rx_signals = steering_vectors * tx_signal
-
+    steering_tx = create_steering_vectors(antena_rx_nbr, antena_spacing, np.radians(theta)).reshape(-1, 1)
+    rx_signals = steering_tx * tx_signal.reshape(1, -1)
     rx_signals = generate_noise_on_signal(rx_signals)
 
-    theta_scan = np.linspace(-1*np.pi, np.pi, 1000)
-    results = list()
-    for theta_i in theta_scan:
-        w = create_steering_vectors(antena_rx_nbr, antena_spacing, theta_i)
-        X_weighted = beamforming(rx_signals, w)
-        results.append(10*np.log10(np.var(X_weighted)))
-    results -= np.max(results)
-    return results
-
-def calculate_beam_vectorized(tx_signal, antena_rx_nbr, antena_spacing, theta):
-    # Signal reçu
-    steering_tx = create_steering_vectors(antena_rx_nbr, antena_spacing, np.radians(theta)).reshape(-1, 1)
-    rx_signals = generate_noise_on_signal(steering_tx * tx_signal.reshape(1, -1))
-
-    # Matrice de scan (Nb_antennes x 1000 angles)
-    theta_scan = np.linspace(-np.pi, np.pi, 1000)
+    theta_scan = np.linspace(-np.pi, np.pi, n_scan)
     n_idx = np.arange(antena_rx_nbr).reshape(-1, 1)
     W = np.exp(-2j * np.pi * antena_spacing * n_idx * np.sin(theta_scan))
 
-    # Beamforming matriciel (1000 x N_samples)
     X_weighted = W.conj().T @ rx_signals
-    
-    # Puissance en dB normalisée
     results = 10 * np.log10(np.var(X_weighted, axis=1))
-    return results - np.max(results)
+    results -= np.max(results)
+    return results
+
+def calculate_ideal_beam(antena_rx_nbr: int, 
+                         antena_spacing: float, 
+                         theta: float, 
+                         n_scan: int = 1000) -> np.ndarray:
+    """
+    Calcule le facteur de réseau théorique pur (sans bruit) en dB
+    """
+    steering_tx = create_steering_vectors(antena_rx_nbr, antena_spacing, np.radians(theta)).reshape(-1, 1)
+    theta_scan = np.linspace(-np.pi, np.pi, n_scan)
+    n_idx = np.arange(antena_rx_nbr).reshape(-1, 1)
+    W = np.exp(-2j * np.pi * antena_spacing * n_idx * np.sin(theta_scan))
+
+    # Réponse théorique du filtre spatial adapté
+    af = np.abs((W.conj().T @ steering_tx).flatten()) ** 2
+    results = 10 * np.log10(af + 1e-12) # +1e-12 pour éviter log10(0)
+    results -= np.max(results)
+    return results
