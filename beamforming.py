@@ -52,3 +52,20 @@ def calculate_beam(tx_signal: 'Real signals seen by antenas',
         results.append(10*np.log10(np.var(X_weighted)))
     results -= np.max(results)
     return results
+
+def calculate_beam_vectorized(tx_signal, antena_rx_nbr, antena_spacing, theta):
+    # Signal reçu
+    steering_tx = create_steering_vectors(antena_rx_nbr, antena_spacing, np.radians(theta)).reshape(-1, 1)
+    rx_signals = generate_noise_on_signal(steering_tx * tx_signal.reshape(1, -1))
+
+    # Matrice de scan (Nb_antennes x 1000 angles)
+    theta_scan = np.linspace(-np.pi, np.pi, 1000)
+    n_idx = np.arange(antena_rx_nbr).reshape(-1, 1)
+    W = np.exp(-2j * np.pi * antena_spacing * n_idx * np.sin(theta_scan))
+
+    # Beamforming matriciel (1000 x N_samples)
+    X_weighted = W.conj().T @ rx_signals
+    
+    # Puissance en dB normalisée
+    results = 10 * np.log10(np.var(X_weighted, axis=1))
+    return results - np.max(results)
